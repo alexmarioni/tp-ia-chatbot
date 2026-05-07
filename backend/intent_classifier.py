@@ -16,9 +16,16 @@ Clasificá el mensaje del usuario en exactamente uno de estos intents:
 
 Respondé SOLO con el intent en minúsculas, sin explicación ni puntuación."""
 
-_CITY_PROMPT = """Extraé el nombre de la ciudad o lugar mencionado en el mensaje del usuario.
-Si no se menciona ninguna ciudad concreta, respondé con "Buenos Aires".
-Respondé SOLO con el nombre de la ciudad, sin explicación."""
+_LOCATION_PROMPT = """Extraé la ubicación geográfica mencionada en el mensaje del usuario.
+Respondé SOLO con un JSON válido con estas tres claves (sin texto extra):
+- "city": nombre de la ciudad (si no hay ciudad concreta, "Buenos Aires")
+- "province": provincia o estado (cadena vacía si no se menciona)
+- "country": país (cadena vacía si no se menciona, inferí "Argentina" si el contexto lo sugiere)
+
+Ejemplos:
+Mensaje: "¿Cómo está el clima en Córdoba?" → {"city": "Córdoba", "province": "Córdoba", "country": "Argentina"}
+Mensaje: "tiempo en Córdoba, España" → {"city": "Córdoba", "province": "Andalucía", "country": "España"}
+Mensaje: "quiero saber el tiempo" → {"city": "Buenos Aires", "province": "Buenos Aires", "country": "Argentina"}"""
 
 
 def classify(message: str) -> str:
@@ -36,14 +43,25 @@ def classify(message: str) -> str:
     return intent if intent in valid else "chitchat"
 
 
-def extract_city(message: str) -> str:
+def extract_location(message: str) -> dict:
+    """Retorna {"city": str, "province": str, "country": str}."""
+    import json
     response = _client.chat.completions.create(
         model=_MODEL,
         messages=[
-            {"role": "system", "content": _CITY_PROMPT},
+            {"role": "system", "content": _LOCATION_PROMPT},
             {"role": "user", "content": message},
         ],
         temperature=0,
-        max_tokens=20,
+        max_tokens=60,
     )
-    return response.choices[0].message.content.strip()
+    raw = response.choices[0].message.content.strip()
+    try:
+        data = json.loads(raw)
+        return {
+            "city": data.get("city", "Buenos Aires"),
+            "province": data.get("province", ""),
+            "country": data.get("country", ""),
+        }
+    except (json.JSONDecodeError, AttributeError):
+        return {"city": raw, "province": "", "country": ""}

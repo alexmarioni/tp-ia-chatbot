@@ -21,6 +21,12 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class CoordsRequest(BaseModel):
+    session_id: str
+    lat: float
+    lon: float
+
+
 class ChatResponse(BaseModel):
     reply: str
     intent: str
@@ -57,8 +63,8 @@ async def chat(req: ChatRequest):
     intent = classifier.classify(message)
 
     if intent == "weather":
-        city = classifier.extract_city(message)
-        reply = await weather.get_weather(city)
+        loc = classifier.extract_location(message)
+        reply = await weather.get_weather(loc["city"], loc["province"], loc["country"])
     elif intent == "greeting":
         reply = _GREETING_REPLY
     elif intent == "goodbye":
@@ -68,6 +74,15 @@ async def chat(req: ChatRequest):
         reply = _CHITCHAT_REPLY
 
     return ChatResponse(reply=reply, intent=intent, session_active=True)
+
+
+@app.post("/weather/coords", response_model=ChatResponse)
+async def weather_by_coords(req: CoordsRequest):
+    if not sessions.is_active(req.session_id):
+        raise HTTPException(status_code=410, detail="Sesión cerrada.")
+    sessions.touch(req.session_id)
+    reply = await weather.get_weather_by_coords(req.lat, req.lon)
+    return ChatResponse(reply=reply, intent="weather", session_active=True)
 
 
 @app.delete("/session/{session_id}")

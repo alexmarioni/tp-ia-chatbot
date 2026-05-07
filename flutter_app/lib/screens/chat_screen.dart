@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import '../services/chat_service.dart';
 import '../widgets/message_bubble.dart';
@@ -20,6 +21,7 @@ class _ChatScreenState extends State<ChatScreen> {
   late String _sessionId;
   bool _sessionActive = true;
   bool _isLoading = false;
+  bool _isLocating = false;
 
   Timer? _inactivityTimer;
   Timer? _closeTimer;
@@ -34,7 +36,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _addBotMessage(
       '¡Hola! Soy tu asistente de clima. '
       'Preguntame el tiempo en cualquier ciudad, por ejemplo: '
-      '"¿Cómo está el clima en Rosario?"',
+      '"¿Cómo está el clima en Rosario?" '
+      'También podés usar el botón 📍 para consultar el clima en tu ubicación actual.',
     );
   }
 
@@ -91,7 +94,8 @@ class _ChatScreenState extends State<ChatScreen> {
       await _service.closeSession(_sessionId);
     } catch (_) {}
     setState(() => _sessionActive = false);
-    _addBotMessage('Conversación cerrada por inactividad. Presioná "Nueva conversación" para continuar.');
+    _addBotMessage(
+        'Conversación cerrada por inactividad. Presioná "Nueva conversación" para continuar.');
   }
 
   Future<void> _sendMessage() async {
@@ -112,10 +116,63 @@ class _ChatScreenState extends State<ChatScreen> {
         _closeTimer?.cancel();
       }
     } catch (e) {
-      _addBotMessage('Error al conectar con el servidor. Verificá que el backend esté corriendo.');
+      _addBotMessage(
+          'Error al conectar con el servidor. Verificá que el backend esté corriendo.');
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _sendLocation() async {
+    if (_isLoading || _isLocating || !_sessionActive) return;
+
+    setState(() => _isLocating = true);
+    _resetInactivityTimer();
+
+    try {
+      final position = await _getPosition();
+      _addUserMessage('📍 Mi ubicación actual');
+      setState(() => _isLoading = true);
+
+      final result =
+          await _service.sendCoords(_sessionId, position.latitude, position.longitude);
+      _addBotMessage(result['reply'] as String);
+    } on LocationPermissionDeniedException {
+      _addBotMessage(
+        'No tengo permiso para acceder a tu ubicación. '
+        'En Windows: Configuración → Privacidad y seguridad → Ubicación → activar acceso.',
+      );
+    } on LocationServiceDisabledException {
+      _addBotMessage(
+        'El servicio de ubicación está desactivado. '
+        'Activalo en Configuración → Privacidad y seguridad → Ubicación.',
+      );
+    } catch (e) {
+      _addBotMessage('No se pudo obtener la ubicación. Intentá de nuevo.');
+    } finally {
+      setState(() {
+        _isLocating = false;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<Position> _getPosition() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) throw LocationServiceDisabledException();
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw LocationPermissionDeniedException();
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.low),
+    );
   }
 
   void _startNewSession() {
@@ -128,7 +185,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _addBotMessage(
       '¡Nueva conversación iniciada! '
-      'Preguntame el tiempo en cualquier ciudad.',
+      'Preguntame el tiempo en cualquier ciudad o usá el botón 📍.',
     );
   }
 
@@ -180,7 +237,7 @@ class _ChatScreenState extends State<ChatScreen> {
               itemBuilder: (_, i) => MessageBubble(message: _messages[i]),
             ),
           ),
-          if (_isLoading)
+          if (_isLoading || _isLocating)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
               child: LinearProgressIndicator(),
@@ -192,6 +249,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
+    final enabled = _sessionActive && !_isLoading && !_isLocating;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -207,10 +265,26 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         child: Row(
           children: [
+            // Botón de ubicación
+            Tooltip(
+              message: 'Clima en mi ubicación',
+              child: IconButton(
+                onPressed: enabled ? _sendLocation : null,
+                icon: _isLocating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 4),
             Expanded(
               child: TextField(
                 controller: _controller,
-                enabled: _sessionActive && !_isLoading,
+                enabled: enabled,
                 onSubmitted: (_) => _sendMessage(),
                 decoration: InputDecoration(
                   hintText: _sessionActive
@@ -221,7 +295,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
@@ -230,7 +305,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: (_sessionActive && !_isLoading) ? _sendMessage : null,
+              onPressed: enabled ? _sendMessage : null,
               icon: const Icon(Icons.send),
               style: IconButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
@@ -243,3 +318,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
+class LocationPermissionDeniedException implements Exception {}
+class LocationServiceDisabledException implements Exception {}
