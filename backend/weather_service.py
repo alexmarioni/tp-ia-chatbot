@@ -4,29 +4,55 @@ _GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 _WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 
 _WMO_CODES = {
-    0: "cielo despejado",
-    1: "mayormente despejado", 2: "parcialmente nublado", 3: "nublado",
-    45: "niebla", 48: "niebla con escarcha",
-    51: "llovizna leve", 53: "llovizna moderada", 55: "llovizna intensa",
-    61: "lluvia leve", 63: "lluvia moderada", 65: "lluvia intensa",
-    71: "nieve leve", 73: "nieve moderada", 75: "nieve intensa",
-    80: "chubascos leves", 81: "chubascos moderados", 82: "chubascos intensos",
-    95: "tormenta eléctrica", 99: "tormenta con granizo",
+    0: "Cielo despejado",
+    1: "Mayormente despejado", 2: "Parcialmente nublado", 3: "Nublado",
+    45: "Niebla", 48: "Niebla con escarcha",
+    51: "Llovizna leve", 53: "Llovizna moderada", 55: "Llovizna intensa",
+    61: "Lluvia leve", 63: "Lluvia moderada", 65: "Lluvia intensa",
+    71: "Nieve leve", 73: "Nieve moderada", 75: "Nieve intensa",
+    80: "Chubascos leves", 81: "Chubascos moderados", 82: "Chubascos intensos",
+    95: "Tormenta eléctrica", 99: "Tormenta con granizo",
+}
+
+_WMO_EMOJIS = {
+    0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+    45: "🌫️", 48: "🌫️",
+    51: "🌦️", 53: "🌦️", 55: "🌧️",
+    61: "🌧️", 63: "🌧️", 65: "🌧️",
+    71: "🌨️", 73: "🌨️", 75: "❄️",
+    80: "🌦️", 81: "🌦️", 82: "⛈️",
+    95: "⛈️", 99: "⛈️",
 }
 
 _WEATHER_PARAMS = "temperature_2m,relative_humidity_2m,weathercode,windspeed_10m,precipitation_probability"
 
 
+def _temp_emoji(temp: float) -> str:
+    if temp < 0:   return "🥶"
+    if temp < 10:  return "🧥"
+    if temp < 20:  return "😊"
+    if temp < 30:  return "🌞"
+    return "🥵"
+
+
 def _format_reply(current: dict, display_name: str) -> str:
-    temp = current["temperature_2m"]
+    temp     = current["temperature_2m"]
     humidity = current["relative_humidity_2m"]
-    wind = current["windspeed_10m"]
-    rain_prob = current.get("precipitation_probability", 0)
-    condition = _WMO_CODES.get(current["weathercode"], "condición desconocida")
+    wind     = current["windspeed_10m"]
+    rain     = current.get("precipitation_probability", 0)
+    code     = current["weathercode"]
+    condition    = _WMO_CODES.get(code, "Condición desconocida")
+    weather_icon = _WMO_EMOJIS.get(code, "🌡️")
+    rain_icon    = "☔" if rain >= 60 else "🌂"
+
     return (
-        f"En {display_name} hay {condition}. "
-        f"Temperatura: {temp}°C | Humedad: {humidity}% | "
-        f"Viento: {wind} km/h | Probabilidad de lluvia: {rain_prob}%."
+        f"📍 {display_name}\n"
+        f"{weather_icon} {condition}\n"
+        f"\n"
+        f"{_temp_emoji(temp)} Temperatura:    {temp}°C\n"
+        f"💧 Humedad:       {humidity}%\n"
+        f"💨 Viento:        {wind} km/h\n"
+        f"{rain_icon} Prob. de lluvia: {rain}%"
     )
 
 
