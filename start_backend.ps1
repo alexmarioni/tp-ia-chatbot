@@ -1,6 +1,6 @@
-# start_backend.ps1 — Levanta el backend del chatbot de clima
+# start_backend.ps1 - Levanta el backend del chatbot de clima
 $ErrorActionPreference = "Stop"
-$Host.UI.RawUI.WindowTitle = "Chatbot de Clima — Backend"
+$Host.UI.RawUI.WindowTitle = "Chatbot de Clima - Backend"
 
 $root       = $PSScriptRoot
 $backendDir = Join-Path $root "backend"
@@ -11,7 +11,7 @@ $activate   = Join-Path $venvDir "Scripts\Activate.ps1"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   Chatbot de Clima — Backend Launcher  " -ForegroundColor Cyan
+Write-Host "   Chatbot de Clima - Backend Launcher  " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
