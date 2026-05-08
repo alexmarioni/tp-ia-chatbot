@@ -1,6 +1,7 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
+from session_manager import MAX_CHITCHATS
 
 load_dotenv()
 
@@ -41,6 +42,49 @@ def classify(message: str) -> str:
     intent = response.choices[0].message.content.strip().lower()
     valid = {"weather", "greeting", "goodbye", "chitchat"}
     return intent if intent in valid else "chitchat"
+
+
+_CHITCHAT_SYSTEM = """Sos un asistente virtual especializado en clima, amigable pero enfocado.
+El usuario dijo algo fuera del tema clima. Respondé en 1-2 oraciones cortas adaptando el tono:
+- Saludo o pregunta personal ("¿cómo estás?"): respondé cálidamente
+- Insulto o queja agresiva ("¡idiota!"): respondé con calma, sin confrontar, sin disculparte de más
+- Comentario random ("tengo hambre", "me gusta el fútbol"): respondé con humor leve o empatía
+- Siempre terminá redirigiendo al clima. Sé natural y variado, no uses frases genéricas.
+{limit_hint}"""
+
+_CHITCHAT_LIMIT_HINT = "Además, avisá amablemente que es tu última respuesta fuera del tema."
+
+_GREETING_SYSTEM = """Sos un asistente de clima amigable. El usuario te saludó.
+Respondé con un saludo cálido y breve (1-2 oraciones). Presentate como asistente de clima
+y sugerí cómo usarte con un ejemplo concreto de ciudad. Sé natural y variado."""
+
+
+def generate_chitchat_reply(message: str, count: int) -> str:
+    hint = _CHITCHAT_LIMIT_HINT if count >= MAX_CHITCHATS else ""
+    system = _CHITCHAT_SYSTEM.format(limit_hint=hint).strip()
+    response = _client.chat.completions.create(
+        model=_MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+        temperature=0.7,
+        max_tokens=80,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def generate_greeting_reply(message: str) -> str:
+    response = _client.chat.completions.create(
+        model=_MODEL,
+        messages=[
+            {"role": "system", "content": _GREETING_SYSTEM},
+            {"role": "user", "content": message},
+        ],
+        temperature=0.7,
+        max_tokens=80,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def extract_location(message: str) -> dict:
