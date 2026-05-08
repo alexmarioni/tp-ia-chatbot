@@ -2,11 +2,15 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 
+MAX_CHITCHATS = 3
+
+
 @dataclass
 class SessionData:
     last_active: datetime = field(default_factory=datetime.utcnow)
     warned: bool = False
     active: bool = True
+    chitchat_count: int = 0
 
 
 _sessions: dict[str, SessionData] = {}
@@ -31,3 +35,10 @@ def close_session(session_id: str) -> None:
 
 def is_active(session_id: str) -> bool:
     return _sessions.get(session_id, SessionData()).active
+
+
+def increment_chitchat(session_id: str) -> int:
+    """Incrementa el contador y retorna el nuevo valor."""
+    session = get_or_create(session_id)
+    session.chitchat_count += 1
+    return session.chitchat_count

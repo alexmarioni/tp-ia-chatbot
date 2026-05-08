@@ -33,9 +33,14 @@ class ChatResponse(BaseModel):
     session_active: bool
 
 
-_CHITCHAT_REPLY = (
-    "Entiendo, pero estoy especializado en consultas de clima. "
-    "¿Querés saber el tiempo en alguna ciudad?"
+_CHITCHAT_REPLIES = [
+    "Entiendo, pero estoy especializado en consultas de clima. ¿Querés saber el tiempo en alguna ciudad?",
+    "¡Interesante! Aunque mi fuerte es el clima. ¿Te puedo ayudar con eso?",
+    "Me quedo sin palabras para otros temas 😅. A partir de ahora solo respondo consultas de clima.",
+]
+_CHITCHAT_LIMIT_REPLY = (
+    "Ya agotaste mis respuestas de conversación general. "
+    "Solo puedo ayudarte con consultas de clima. ¿En qué ciudad querés saber el tiempo?"
 )
 _GREETING_REPLY = (
     "¡Hola! Soy tu asistente de clima. "
@@ -71,7 +76,11 @@ async def chat(req: ChatRequest):
         sessions.close_session(req.session_id)
         return ChatResponse(reply=_GOODBYE_REPLY, intent="goodbye", session_active=False)
     else:
-        reply = _CHITCHAT_REPLY
+        count = sessions.increment_chitchat(req.session_id)
+        if count <= sessions.MAX_CHITCHATS:
+            reply = _CHITCHAT_REPLIES[count - 1]
+        else:
+            reply = _CHITCHAT_LIMIT_REPLY
 
     return ChatResponse(reply=reply, intent=intent, session_active=True)
 
