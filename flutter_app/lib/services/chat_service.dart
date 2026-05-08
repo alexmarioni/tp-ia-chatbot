@@ -49,4 +49,15 @@ class ChatService {
         .delete(Uri.parse('$_baseUrl/session/$sessionId'))
         .timeout(const Duration(seconds: 5));
   }
+
+  Future<bool> checkHealth() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/health'))
+          .timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }

@@ -22,6 +22,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sessionActive = true;
   bool _isLoading = false;
   bool _isLocating = false;
+  bool _backendReady = false;
+  Timer? _healthTimer;
 
   Timer? _inactivityTimer;
   Timer? _closeTimer;
@@ -33,6 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _sessionId = const Uuid().v4();
+    _pollBackendHealth();
     _addBotMessage(
       '¡Hola! Soy tu asistente de clima. '
       'Preguntame el tiempo en cualquier ciudad, por ejemplo: '
@@ -45,9 +48,29 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _inactivityTimer?.cancel();
     _closeTimer?.cancel();
+    _healthTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _pollBackendHealth() {
+    _service.checkHealth().then((ok) {
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _backendReady = true);
+        return;
+      }
+      _healthTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+        final ready = await _service.checkHealth();
+        if (!mounted) return;
+        if (ready) {
+          _healthTimer?.cancel();
+          _healthTimer = null;
+          setState(() => _backendReady = true);
+        }
+      });
+    });
   }
 
   void _addBotMessage(String text) {
@@ -116,8 +139,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _closeTimer?.cancel();
       }
     } catch (e) {
-      _addBotMessage(
-          'Error al conectar con el servidor. Verificá que el backend esté corriendo.');
+      setState(() => _backendReady = false);
+      _pollBackendHealth();
+      _addBotMessage('Se perdió la conexión con el servidor. Reconectando...');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -148,7 +172,9 @@ class _ChatScreenState extends State<ChatScreen> {
         'Activalo en Configuración → Privacidad y seguridad → Ubicación.',
       );
     } catch (e) {
-      _addBotMessage('No se pudo obtener la ubicación. Intentá de nuevo.');
+      setState(() => _backendReady = false);
+      _pollBackendHealth();
+      _addBotMessage('No se pudo obtener la ubicación. Verificá la conexión con el servidor.');
     } finally {
       setState(() {
         _isLocating = false;
@@ -205,6 +231,36 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          // Banner: backend no disponible
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: _backendReady
+                ? const SizedBox.shrink()
+                : Container(
+                    key: const ValueKey('backend-connecting'),
+                    width: double.infinity,
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Iniciando servidor...',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+          // Banner: sesión cerrada
           if (!_sessionActive)
             Container(
               width: double.infinity,
@@ -249,7 +305,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
-    final enabled = _sessionActive && !_isLoading && !_isLocating;
+    final enabled = _sessionActive && !_isLoading && !_isLocating && _backendReady;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -265,7 +321,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         child: Row(
           children: [
-            // Botón de ubicación
             Tooltip(
               message: 'Clima en mi ubicación',
               child: IconButton(
@@ -287,9 +342,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 enabled: enabled,
                 onSubmitted: (_) => _sendMessage(),
                 decoration: InputDecoration(
-                  hintText: _sessionActive
-                      ? '¿Cómo está el clima en...?'
-                      : 'Sesión cerrada',
+                  hintText: !_backendReady
+                      ? 'Iniciando servidor...'
+                      : _sessionActive
+                          ? '¿Cómo está el clima en...?'
+                          : 'Sesión cerrada',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
