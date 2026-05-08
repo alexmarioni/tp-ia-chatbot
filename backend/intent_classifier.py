@@ -10,23 +10,48 @@ _MODEL = "llama-3.1-8b-instant"
 
 _INTENT_PROMPT = """Sos un clasificador de intents para un chatbot de clima.
 Clasificá el mensaje del usuario en exactamente uno de estos intents:
-- weather: el usuario quiere saber el clima o tiempo de algún lugar
-- greeting: saludo inicial (hola, buenas, hey, etc.)
-- goodbye: despedida (chau, hasta luego, adiós, etc.)
-- chitchat: cualquier otro tema no relacionado con el clima
+
+- weather: el usuario quiere saber el clima de algún lugar. Incluye TODOS estos casos:
+  * Preguntas explícitas ("¿cómo está el clima en X?", "¿va a llover en X?", "tiempo en X")
+  * Solo un nombre de lugar, con o sin tildes, con o sin mayúsculas ("cordoba", "entre rios", "villa del rosario")
+  * Nombre de lugar + provincia o país ("gobernador racedo entre rios", "cordoba argentina")
+  * Nombres de ciudades o pueblos poco conocidos o inusuales: si parece un nombre propio geográfico, es weather
+
+- greeting: saludo sin consulta de clima ("hola", "buenas", "hey", "¿cómo estás?", "buen día")
+
+- goodbye: despedida ("chau", "hasta luego", "adiós", "nos vemos", "bye")
+
+- chitchat: tema que claramente NO es un lugar ni un saludo (comentarios, insultos, preguntas personales, comida, deportes, etc.)
+
+REGLA CRÍTICA: Si el mensaje es o podría ser un nombre de ciudad, pueblo, provincia o país,
+clasificalo como "weather" aunque le falten tildes, mayúsculas o palabras como "clima" o "tiempo".
+Ante la duda entre "weather" y "chitchat", siempre elegí "weather".
+
+Ejemplos:
+"gobernador racedo entre rios" → weather
+"Gobernador Racedo, Entre Ríos" → weather
+"cordoba" → weather
+"villa del rosario córdoba" → weather
+"hola" → greeting
+"tengo hambre" → chitchat
+"chau" → goodbye
+"me gusta el fútbol" → chitchat
 
 Respondé SOLO con el intent en minúsculas, sin explicación ni puntuación."""
 
 _LOCATION_PROMPT = """Extraé la ubicación geográfica mencionada en el mensaje del usuario.
+El mensaje puede estar mal escrito, sin tildes o en minúsculas: normalizá el nombre correctamente.
 Respondé SOLO con un JSON válido con estas tres claves (sin texto extra):
-- "city": nombre de la ciudad (si no hay ciudad concreta, "Buenos Aires")
-- "province": provincia o estado (cadena vacía si no se menciona)
-- "country": país (cadena vacía si no se menciona, inferí "Argentina" si el contexto lo sugiere)
+- "city": nombre de la ciudad o pueblo con ortografía correcta y mayúsculas
+- "province": provincia o estado con ortografía correcta (cadena vacía si no se puede inferir)
+- "country": país con ortografía correcta (inferí "Argentina" si el contexto lo sugiere, vacío si es de otro país)
 
 Ejemplos:
-Mensaje: "¿Cómo está el clima en Córdoba?" → {"city": "Córdoba", "province": "Córdoba", "country": "Argentina"}
-Mensaje: "tiempo en Córdoba, España" → {"city": "Córdoba", "province": "Andalucía", "country": "España"}
-Mensaje: "quiero saber el tiempo" → {"city": "Buenos Aires", "province": "Buenos Aires", "country": "Argentina"}"""
+"¿Cómo está el clima en Córdoba?" → {"city": "Córdoba", "province": "Córdoba", "country": "Argentina"}
+"gobernador racedo entre rios" → {"city": "Gobernador Racedo", "province": "Entre Ríos", "country": "Argentina"}
+"villa del rosario cordoba" → {"city": "Villa del Rosario", "province": "Córdoba", "country": "Argentina"}
+"tiempo en cordoba españa" → {"city": "Córdoba", "province": "Andalucía", "country": "España"}
+"quiero saber el tiempo" → {"city": "Buenos Aires", "province": "Buenos Aires", "country": "Argentina"}"""
 
 
 def classify(message: str) -> str:
