@@ -8,7 +8,50 @@ $venvDir    = Join-Path $backendDir ".venv"
 $envFile    = Join-Path $backendDir ".env"
 $reqs       = Join-Path $backendDir "requirements.txt"
 $activate   = Join-Path $venvDir "Scripts\Activate.ps1"
-$exePath    = Join-Path $root "flutter_app\build\windows\x64\runner\Release\chatbot_clima.exe"
+$releaseDir = Join-Path $root "flutter_app\release\windows"
+$buildDir   = Join-Path $root "flutter_app\build\windows\x64\runner\Release"
+
+function Test-FrontendBundle {
+    param(
+        [string]$DirPath
+    )
+
+    if (-not (Test-Path $DirPath)) {
+        return $false
+    }
+
+    $requiredPaths = @(
+        "chatbot_clima.exe",
+        "flutter_windows.dll",
+        "geolocator_windows_plugin.dll",
+        "data\app.so",
+        "data\icudtl.dat",
+        "data\flutter_assets\FontManifest.json"
+    )
+
+    foreach ($relativePath in $requiredPaths) {
+        $fullPath = Join-Path $DirPath $relativePath
+        if (-not (Test-Path $fullPath)) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+$frontendDir = $null
+
+if (Test-FrontendBundle $buildDir) {
+    $frontendDir = $buildDir
+} elseif (Test-FrontendBundle $releaseDir) {
+    $frontendDir = $releaseDir
+}
+
+$exePath = if ($null -ne $frontendDir) {
+    Join-Path $frontendDir "chatbot_clima.exe"
+} else {
+    Join-Path $releaseDir "chatbot_clima.exe"
+}
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -50,14 +93,15 @@ Write-Host "[...] Verificando dependencias..." -ForegroundColor Yellow
 pip install -r $reqs -q --disable-pip-version-check
 Write-Host "[OK] Dependencias listas" -ForegroundColor Green
 
-# 5. Verificar / buildear Flutter EXE
-if (-not (Test-Path $exePath)) {
+# 5. Verificar / buildear bundle Flutter
+if ($null -eq $frontendDir) {
     Write-Host ""
-    Write-Host "[!] EXE de Flutter no encontrado." -ForegroundColor Yellow
+    Write-Host "[!] Frontend precompilado no encontrado." -ForegroundColor Yellow
     $flutterCmd = Get-Command flutter -ErrorAction SilentlyContinue
     if ($null -eq $flutterCmd) {
-        Write-Host "[ERROR] flutter.exe no esta en PATH y el EXE no existe." -ForegroundColor Red
-        Write-Host "        Ejecuta manualmente: cd flutter_app && flutter build windows --release" -ForegroundColor Yellow
+        Write-Host "[ERROR] No existe el bundle en flutter_app\release\windows y flutter.exe no esta en PATH." -ForegroundColor Red
+        Write-Host "        Solucion 1: subir al repo el contenido de flutter_app\release\windows" -ForegroundColor Yellow
+        Write-Host "        Solucion 2: ejecutar manualmente: cd flutter_app && flutter build windows --release" -ForegroundColor Yellow
         Read-Host "Presiona Enter para salir"
         exit 1
     }
@@ -72,9 +116,15 @@ if (-not (Test-Path $exePath)) {
         Read-Host "Presiona Enter para salir"
         exit 1
     }
-    Write-Host "[OK] Build de Flutter completado" -ForegroundColor Green
+    if (-not (Test-Path $releaseDir)) {
+        New-Item -ItemType Directory -Path $releaseDir | Out-Null
+    }
+    Copy-Item -Path (Join-Path $buildDir "*") -Destination $releaseDir -Recurse -Force
+    $frontendDir = $releaseDir
+    $exePath = Join-Path $frontendDir "chatbot_clima.exe"
+    Write-Host "[OK] Build de Flutter completado y bundle actualizado en flutter_app\release\windows" -ForegroundColor Green
 } else {
-    Write-Host "[OK] EXE de Flutter encontrado" -ForegroundColor Green
+    Write-Host "[OK] Frontend precompilado encontrado en $frontendDir" -ForegroundColor Green
 }
 
 # 6. Arrancar backend en nueva ventana (no bloqueante)

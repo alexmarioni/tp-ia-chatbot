@@ -28,7 +28,7 @@ Chatbot conversacional que consulta el clima en tiempo real, detecta chit-chat y
 - **Python 3.10+** — [descargar](https://www.python.org/downloads/)
 - **API key de Groq** (gratuita, sin tarjeta de crédito) — [obtener en console.groq.com](https://console.groq.com)
 
-> Flutter **no es necesario** si el EXE ya está compilado en `flutter_app/build/windows/x64/runner/Release/`.
+> Flutter **no es necesario** para ejecutar el proyecto desde Windows si el bundle precompilado existe en `flutter_app/release/windows/`.
 
 ### Paso 1 — Clonar el repositorio
 
@@ -54,8 +54,10 @@ Hacer **doble click** en `iniciar.ps1` (o click derecho → *Ejecutar con PowerS
 El script hace todo automáticamente:
 1. Verifica Python y crea el entorno virtual
 2. Instala las dependencias del backend
-3. Abre el backend en una ventana separada
-4. Lanza la aplicación Flutter
+3. Usa el frontend precompilado de `flutter_app/release/windows/` si existe
+4. Si Flutter está instalado y no existe bundle precompilado, compila el frontend
+5. Abre el backend en una ventana separada
+6. Lanza la aplicación Flutter
 
 > Si aparece un error de permisos en PowerShell, ejecutar primero en una terminal de administrador:
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
@@ -90,9 +92,11 @@ cd flutter_app
 flutter pub get
 flutter run -d windows
 
-# Para compilar el EXE de distribución:
+# Para compilar el frontend Windows:
 flutter build windows --release
 ```
+
+Luego copiar el contenido de `build/windows/x64/runner/Release/` a `release/windows/` para dejar actualizado el bundle versionado que usa `iniciar.ps1`.
 
 ---
 
@@ -109,6 +113,7 @@ tp-ia-chatbot/
 │   ├── session_manager.py        # Sesiones, timeout y límite de chit-chat
 │   └── requirements.txt
 └── flutter_app/
+    ├── release/windows/          # Bundle Windows versionado para ejecutar sin Flutter
     └── lib/
         ├── main.dart
         ├── screens/chat_screen.dart    # UI principal + timers + health check
